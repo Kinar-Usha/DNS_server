@@ -15,16 +15,16 @@ impl BytePacketBuffer{
         }
     }
 
-    fn pos(&self) -> usize {
+    pub fn pos(&self) -> usize {
         self.pos
     }
     
-    fn step(&mut self, steps: usize) -> Result<()> {
+    pub fn step(&mut self, steps: usize) -> Result<()> {
         self.pos+= steps;
         Ok(())
     }
 
-    fn seek(&mut self, pos: usize) -> Result<()> {
+    pub fn seek(&mut self, pos: usize) -> Result<()> {
         self.pos = pos;
 
         Ok(())
@@ -32,7 +32,7 @@ impl BytePacketBuffer{
 
 
 
-    fn read(&mut self) -> Result<u8> {
+    pub fn read(&mut self) -> Result<u8> {
         if self.pos >= 512 {
             return Err("End of buffer".into());
         }
@@ -42,27 +42,27 @@ impl BytePacketBuffer{
         Ok(res)
     }
 
-    fn get(&mut self, pos: usize) -> Result<u8> {
+    pub fn get(&mut self, pos: usize) -> Result<u8> {
         if pos >= 512 {
             return Err("End of buffer".into());
         }
         Ok(self.buf[pos])
     }
 
-    fn get_range(&mut self, start: usize, len: usize) -> Result<&[u8]> {
+    pub fn get_range(&mut self, start: usize, len: usize) -> Result<&[u8]> {
         if start + len >= 512 {
             return Err("End of buffer".into());
         }
         Ok(&self.buf[start..start + len as usize])
     }
 
-    fn read_u16(&mut self) -> Result<u16> {
+    pub fn read_u16(&mut self) -> Result<u16> {
         let res = ((self.read()? as u16) << 8) | (self.read()? as u16);
 
         Ok(res)
     }
 
-    fn read_u32(&mut self) -> Result<u32> {
+    pub fn read_u32(&mut self) -> Result<u32> {
         let res = ((self.read()? as u32) << 24)
             | ((self.read()? as u32) << 16)
             | ((self.read()? as u32) << 8)
@@ -71,7 +71,7 @@ impl BytePacketBuffer{
         Ok(res)
     }
 
-    fn read_qname(&mut self, outstr: &mut String) -> Result<()> {
+    pub fn read_qname(&mut self, outstr: &mut String) -> Result<()> {
         let mut pos = self.pos();
         let mut jumped = false;
 
@@ -125,7 +125,7 @@ impl BytePacketBuffer{
         Ok(())
     }
 
-    fn write(&mut self, val: u8) -> Result<()> {
+    pub fn write(&mut self, val: u8) -> Result<()> {
         if self.pos >= 512 {
             return Err("End of buffer".into());
         }
@@ -134,20 +134,20 @@ impl BytePacketBuffer{
         Ok(())
     }
 
-    fn write_u8(&mut self, val: u8) -> Result<()> {
+    pub fn write_u8(&mut self, val: u8) -> Result<()> {
         self.write(val)?;
 
         Ok(())
     }
 
-    fn write_u16(&mut self, val: u16) -> Result<()> {
+    pub fn write_u16(&mut self, val: u16) -> Result<()> {
         self.write((val >> 8) as u8)?;
         self.write((val & 0xFF) as u8)?;
 
         Ok(())
     }
 
-    fn write_u32(&mut self, val: u32) -> Result<()> {
+    pub fn write_u32(&mut self, val: u32) -> Result<()> {
         self.write(((val >> 24) & 0xFF) as u8)?;
         self.write(((val >> 16) & 0xFF) as u8)?;
         self.write(((val >> 8) & 0xFF) as u8)?;
@@ -156,7 +156,7 @@ impl BytePacketBuffer{
         Ok(())
     }
 
-    fn write_qname(&mut self, qname: &str) -> Result<()> {
+    pub fn write_qname(&mut self, qname: &str) -> Result<()> {
         for label in qname.split('.') {
             let len = label.len();
             if len > 0x34 {
@@ -174,13 +174,13 @@ impl BytePacketBuffer{
         Ok(())
     }
 
-    fn set(&mut self, pos: usize, val: u8) -> Result<()> {
+    pub fn set(&mut self, pos: usize, val: u8) -> Result<()> {
         self.buf[pos] = val;
 
         Ok(())
     }
 
-    fn set_u16(&mut self, pos: usize, val: u16) -> Result<()> {
+    pub fn set_u16(&mut self, pos: usize, val: u16) -> Result<()> {
         self.set(pos, (val >> 8) as u8)?;
         self.set(pos + 1, (val & 0xFF) as u8)?;
 
