@@ -1,5 +1,4 @@
-use std::hash::BuildHasherDefault;
-
+use std::net::{Ipv4Addr, Ipv6Addr};
 use crate::buffer::BytePacketBuffer;
 type Error = Box<dyn std::error::Error>;
 type Result<T> = std::result::Result<T, Error>;
@@ -168,4 +167,127 @@ impl DnsQuestion{
         buffer.write_u16(1)?;
         Ok(())
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum DnsRecord{
+    UNKNOWN {
+        domain: String,
+        qtype: u16,
+        data_len: u16,
+        ttl: u32,
+    },
+    A {
+        domain: String,
+        addr: Ipv4Addr,
+        ttl: u32,
+    },
+    NS {
+        domain: String,
+        host: String,
+        ttl: u32,
+    },
+    CNAME {
+        domain: String,
+        host: String,
+        ttl: u32,
+    },
+    MX {
+        domain: String,
+        priority: u16,
+        host: String,
+        ttl: u32,
+    },
+    AAAA {
+        domain: String,
+        addr: Ipv6Addr,
+        ttl: u32,
+    }
+}
+
+impl DnsRecord {
+    pub fn read(buffer: &mut BytePacketBuffer) -> Result<DnsRecord> {
+        let mut domain = String::new();
+        buffer.read_qname(&mut domain)?;
+
+        let qtype_num =buffer.read_u16()?;
+        let qtype = QueryType::from_num(qtype_num);
+        let _ = buffer.read_u16()?;
+        let ttl = buffer.read_u32()?;
+        let data_len = buffer.read_u16()?;
+
+        match qtype {
+            QueryType::A => {
+                let raw_addr = buffer.read_u32()?;
+                let ipaddr = Ipv4Addr::new(
+                    ((raw_addr >> 24) & 0xFF) as u8,
+                    ((raw_addr >> 16) & 0xFF) as u8,
+                    ((raw_addr >> 8) & 0xFF) as u8,
+                    ((raw_addr >> 0) & 0xFF) as u8,
+                );
+                Ok(DnsRecord::A { domain: domain, addr: ipaddr, ttl: ttl })
+            }
+            
+            QueryType::AAAA =>{
+                let raw_addr1 = buffer.read_u32()?;
+                let raw_addr2 = buffer.read_u32()?;
+                let raw_addr3 = buffer.read_u32()?;
+                let raw_addr4 = buffer.read_u32()?;
+                let addr = Ipv6Addr::new(
+                    ((raw_addr1 >> 16) & 0xFFFF) as u16,
+                    ((raw_addr1 >> 0) & 0xFFFF) as u16,
+                    ((raw_addr2 >> 16) & 0xFFFF) as u16,
+                    ((raw_addr2 >> 0) & 0xFFFF) as u16,
+                    ((raw_addr3 >> 16) & 0xFFFF) as u16,
+                    ((raw_addr3 >> 0) & 0xFFFF) as u16,
+                    ((raw_addr4 >> 16) & 0xFFFF) as u16,
+                    ((raw_addr4 >> 0) & 0xFFFF) as u16,
+                );
+                Ok(DnsRecord::AAAA { domain: domain, addr: addr, ttl: ttl })
+            }
+            QueryType::NS => {
+                let mut ns = String::new();
+                buffer.read_qname(&mut ns)?;
+
+                Ok(DnsRecord::NS {
+                    domain,
+                    host: ns,
+                    ttl,
+                })
+            }
+            QueryType::CNAME => {
+                let mut cname = String::new();
+                buffer.read_qname(&mut cname)?;
+
+                Ok(DnsRecord::CNAME {
+                    domain,
+                    host: cname,
+                    ttl,
+                })
+            }
+            QueryType::MX => {
+                let priority = buffer.read_u16()?;
+                let mut mx = String::new();
+                buffer.read_qname(&mut mx)?;
+
+                Ok(DnsRecord::MX {
+                    domain,
+                    priority,
+                    host: mx,
+                    ttl,
+                })
+            }
+            QueryType::UNKNOWN(_) => {
+                buffer.step(data_len as usize)?;
+
+                Ok(DnsRecord::UNKNOWN {
+                    domain,
+                    qtype: qtype_num,
+                    data_len,
+                    ttl,
+                })
+            }
+        }
+    }
+    
 }
