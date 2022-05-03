@@ -486,7 +486,7 @@ impl DnsPacket {
     }
 
 
-    pub fn get_unresolved_ns  (&self, qname: &str) -> Option(&str) {
+    pub fn get_unresolved_ns<'a>(&'a self, qname: &'a str) -> Option<&'a str> {
         self.get_nameserver(qname).map(|(_, host)| host).next()
     }
 
