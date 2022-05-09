@@ -64,7 +64,7 @@ fn recursive_lookup(qname: &str,qtype : QueryType) -> Result<DnsPacket> {
 }
 
 
-fn handle_query(socket: &UdpSocket) -> Result<()> {
+pub fn handle_query(socket: &UdpSocket) -> Result<()> {
     let mut request_buffer = BytePacketBuffer::new();
     let (_, src) = socket.recv_from(&mut request_buffer.buf)?;
     let mut request = DnsPacket::from_buffer(&mut request_buffer)?;
