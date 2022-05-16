@@ -1,16 +1,15 @@
 type Error = Box<dyn std::error::Error>;
 type Result<T> = std::result::Result<T, Error>;
 
-
 pub struct BytePacketBuffer {
     pub buf: [u8; 512],
     pub pos: usize,
 }
 
-impl BytePacketBuffer{
+impl BytePacketBuffer {
     pub fn new() -> BytePacketBuffer {
         BytePacketBuffer {
-            buf: [0;512],
+            buf: [0; 512],
             pos: 0,
         }
     }
@@ -18,9 +17,9 @@ impl BytePacketBuffer{
     pub fn pos(&self) -> usize {
         self.pos
     }
-    
+
     pub fn step(&mut self, steps: usize) -> Result<()> {
-        self.pos+= steps;
+        self.pos += steps;
         Ok(())
     }
 
@@ -29,8 +28,6 @@ impl BytePacketBuffer{
 
         Ok(())
     }
-
-
 
     pub fn read(&mut self) -> Result<u8> {
         if self.pos >= 512 {
@@ -79,16 +76,13 @@ impl BytePacketBuffer{
         let max_jumps = 5;
         let mut jumps_performed = 0;
         loop {
-           
             if jumps_performed > max_jumps {
                 return Err(format!("Limit of {} jumps exceeded", max_jumps).into());
             }
 
             let len = self.get(pos)?;
 
-            
             if (len & 0xC0) == 0xC0 {
-                
                 if !jumped {
                     self.seek(pos + 2)?;
                 }
@@ -103,7 +97,6 @@ impl BytePacketBuffer{
 
             pos += 1;
 
-           
             if len == 0 {
                 break;
             }
