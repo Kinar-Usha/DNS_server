@@ -1,6 +1,13 @@
+//! This module contains methods which help in manipulating the udp packet
+
+
+
+
 type Error = Box<dyn std::error::Error>;
 type Result<T> = std::result::Result<T, Error>;
 
+
+/// UDP packet structure.
 pub struct BytePacketBuffer {
     pub buf: [u8; 512],
     pub pos: usize,
@@ -67,11 +74,17 @@ impl BytePacketBuffer {
 
         Ok(res)
     }
-
+    /// reading domain name.
+    /// Will take something like [3]www[6]google[3]com[0] and append www.google.com to outstr.
     pub fn read_qname(&mut self, outstr: &mut String) -> Result<()> {
+        
+        //keeping a track of the position locally this allows us to move past the qname while keeping track of the current pos in qname 
         let mut pos = self.pos();
+        
+        // tracking jumps
         let mut jumped = false;
-
+        
+        // to track [dot] but it is initailly kept empty because we dont want a [dot] at the beginning.
         let mut delim = "";
         let max_jumps = 5;
         let mut jumps_performed = 0;
@@ -86,6 +99,8 @@ impl BytePacketBuffer {
                 if !jumped {
                     self.seek(pos + 2)?;
                 }
+                // Read another byte, calculate offset and perform the jump by
+                // updating our local position variable
 
                 let b2 = self.get(pos + 1)? as u16;
                 let offset = (((len as u16) ^ 0xC0) << 8) | b2;
@@ -94,7 +109,7 @@ impl BytePacketBuffer {
                 jumps_performed += 1;
                 continue;
             }
-
+            // if just google.com, just read the next byte.
             pos += 1;
 
             if len == 0 {

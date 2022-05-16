@@ -8,6 +8,7 @@ type Error = Box<dyn std::error::Error>;
 type Result<T> = std::result::Result<T, Error>;
 
 fn lookup(qname: &str, qtype: QueryType, server: (Ipv4Addr, u16)) -> Result<DnsPacket> {
+
     let socket = UdpSocket::bind(("0.0.0.0", 24130))?;
     let mut packet = DnsPacket::new();
 
@@ -28,6 +29,7 @@ fn lookup(qname: &str, qtype: QueryType, server: (Ipv4Addr, u16)) -> Result<DnsP
 }
 
 fn recursive_lookup(qname: &str, qtype: QueryType) -> Result<DnsPacket> {
+    // we start with `a.root-servers.net`
     let mut ns = "198.41.0.4".parse::<Ipv4Addr>().unwrap();
 
     loop {
@@ -39,10 +41,12 @@ fn recursive_lookup(qname: &str, qtype: QueryType) -> Result<DnsPacket> {
         if response.header.rescode == ResultCode::NOERROR && !response.answers.is_empty() {
             return Ok(response);
         }
+
+        // Authoritative name servers replying no domain by that name.
         if response.header.rescode == ResultCode::NXDOMAIN {
             return Ok(response);
         }
-
+        // find a new nameserver based on the reccords in the additional section
         if let Some(new_ns) = response.get_resolved_ns(qname) {
             ns = new_ns;
             continue;
