@@ -1,3 +1,6 @@
+//!  this module implements the dns protocol. 
+//! DnsPacket -> { DnsHeader ,DnsQuestion -> { QueryType }, DnsRecord }
+
 use crate::buffer::BytePacketBuffer;
 use std::net::{Ipv4Addr, Ipv6Addr};
 type Error = Box<dyn std::error::Error>;

@@ -75,7 +75,7 @@ impl BytePacketBuffer {
         Ok(res)
     }
     /// reading domain name.
-    /// Will take something like [3]www[6]google[3]com[0] and append www.google.com to outstr.
+    /// Will take something like \[3\]www\[6\]google\[3\]com\[0\] and append www.google.com to outstr.
     pub fn read_qname(&mut self, outstr: &mut String) -> Result<()> {
         
         //keeping a track of the position locally this allows us to move past the qname while keeping track of the current pos in qname 

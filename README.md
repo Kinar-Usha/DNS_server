@@ -74,3 +74,6 @@ Skipping record: UNKNOWN { domain: "", qtype: 0, data_len: 0, ttl: 0 }
 Skipping record: UNKNOWN { domain: "", qtype: 0, data_len: 0, ttl: 0 }
 Skipping record: UNKNOWN { domain: "", qtype: 0, data_len: 0, ttl: 0 } 
 ```
+
+## Documentation
+run `cargo doc --open`

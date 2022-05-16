@@ -1,3 +1,6 @@
+//! this module contains the methods for resolving and recursively looking up domain names.
+
+
 use crate::buffer::BytePacketBuffer;
 use crate::protocol::{DnsPacket, DnsQuestion, QueryType, ResultCode};
 
