@@ -1,7 +1,7 @@
 # DNS Server
 
-The server is houses a stub resolver, DNS recursive resolver.
-It is compatible with existing DNS query tools like dig and nslookup.
+The server houses a stub resolver, DNS recursive resolver.
+It is compatible with existing DNS query tool dig.
 
 # Reference
 [RFC 1034](https://datatracker.ietf.org/doc/html/rfc1034)
@@ -18,8 +18,6 @@ It is compatible with existing DNS query tools like dig and nslookup.
 ## Example
 ```text
 -> dig "@127.0.0.1" -p 2053 twitch.tv                                                                                                                                     
-;; Warning: Message parser reports malformed message packet.
-
 ; <<>> DiG 9.16.26 <<>> @127.0.0.1 -p 2053 twitch.tv
 ; (1 server found)
 ;; global options: +cmd
@@ -80,6 +78,8 @@ Skipping record: UNKNOWN { domain: "", qtype: 0, data_len: 0, ttl: 0 }
 ## Documentation
 run `cargo doc --open`
 
+
+DNS format
 
 | RFC Name | Descriptive Name     | Length             | Description                                                                                                                                    |
 | -------- | -------------------- | ------------------ | -----------------------------------------------------------------------------------------------------------------------------------------------|
