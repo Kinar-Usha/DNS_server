@@ -1,6 +1,5 @@
 //! this module contains the methods for resolving and recursively looking up domain names.
 
-
 use crate::buffer::BytePacketBuffer;
 use crate::protocol::{DnsPacket, DnsQuestion, QueryType, ResultCode};
 
@@ -11,7 +10,6 @@ type Error = Box<dyn std::error::Error>;
 type Result<T> = std::result::Result<T, Error>;
 
 fn lookup(qname: &str, qtype: QueryType, server: (Ipv4Addr, u16)) -> Result<DnsPacket> {
-
     let socket = UdpSocket::bind(("0.0.0.0", 24130))?;
     let mut packet = DnsPacket::new();
 

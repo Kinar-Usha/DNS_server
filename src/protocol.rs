@@ -1,4 +1,4 @@
-//!  this module implements the dns protocol. 
+//!  this module implements the dns protocol.
 //! DnsPacket -> { DnsHeader ,DnsQuestion -> { QueryType }, DnsRecord }
 
 use crate::buffer::BytePacketBuffer;
@@ -30,23 +30,23 @@ impl ResultCode {
 }
 #[derive(Clone, Debug)]
 pub struct DnsHeader {
-    pub id: u16,                                                   
-    pub recursion_desired: bool,    
-    pub truncated_message: bool,    
-    pub authoritative_answer: bool, 
-    pub opcode: u8, 
-    pub response: bool, 
+    pub id: u16,
+    pub recursion_desired: bool,
+    pub truncated_message: bool,
+    pub authoritative_answer: bool,
+    pub opcode: u8,
+    pub response: bool,
 
-    pub rescode: ResultCode,    
-    pub checking_disabled: bool,    
-    pub authed_data: bool,  
-    pub z: bool,    
-    pub recursion_available: bool,  
+    pub rescode: ResultCode,
+    pub checking_disabled: bool,
+    pub authed_data: bool,
+    pub z: bool,
+    pub recursion_available: bool,
 
-    pub questions: u16, 
-    pub answers: u16,   
-    pub authoritative_entries: u16, 
-    pub resource_entries: u16,  
+    pub questions: u16,
+    pub answers: u16,
+    pub authoritative_entries: u16,
+    pub resource_entries: u16,
 }
 
 impl DnsHeader {
@@ -491,7 +491,7 @@ impl DnsPacket {
             })
             .next()
     }
-    /// function to get an iterator of nameservers listed in the autority section represented as a map (domain,host).
+    /// function to get an iterator of nameservers listed in the authority section represented as a map (domain,host).
     fn get_nameserver<'a>(&'a self, qname: &'a str) -> impl Iterator<Item = (&'a str, &'a str)> {
         self.authorities
             .iter()
@@ -504,7 +504,7 @@ impl DnsPacket {
     pub fn get_resolved_ns(&self, qname: &str) -> Option<Ipv4Addr> {
         // Get an iterator over the nameservers in the authorities section
         self.get_nameserver(qname)
-        //now check for matching A reccord in additonal section
+            //now check for matching A reccord in additonal section
             .flat_map(|(_, host)| {
                 self.resources
                     .iter()
