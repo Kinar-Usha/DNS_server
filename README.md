@@ -77,37 +77,3 @@ Skipping record: UNKNOWN { domain: "", qtype: 0, data_len: 0, ttl: 0 }
 
 ## Documentation
 run `cargo doc --open`
-
-
-DNS format
-
-| RFC Name | Descriptive Name     | Length             | Description                                                                                                                                    |
-| -------- | -------------------- | ------------------ | -----------------------------------------------------------------------------------------------------------------------------------------------|
-| ID       | Packet Identifier    | 16 bits            | A random identifier is assigned to query packets. Response packets must reply with the same id.                                                |
-| QR       | Query Response       | 1 bit              | 0 for queries, 1 for responses.                                                                                                                |
-| OPCODE   | Operation Code       | 4 bits             | Typically always 0, see RFC1035 for details.                                                                                                   |
-| AA       | Authoritative Answer | 1 bit              | Set to 1 if the responding server is authoritative - that is, it "owns" - the domain queried.                                                  |
-| TC       | Truncated Message    | 1 bit              | Set to 1 if the message length exceeds 512 bytes.                                                                                              |
-| RD       | Recursion Desired    | 1 bit              | Set by the sender of the request if the server should attempt to resolve the query recursively if it does not have an answer readily available.|
-| RA       | Recursion Available  | 1 bit              | Set by the server to indicate whether or not recursive queries are allowed.                                                                    |
-| Z        | Reserved             | 3 bits             | Originally reserved for later use, but now used for DNSSEC queries.                                                                            |
-| RCODE    | Response Code        | 4 bits             | Set by the server to indicate the status of the response.                                                                                      |
-| QDCOUNT  | Question Count       | 16 bits            | The number of entries in the Question Section                                                                                                  |
-| ANCOUNT  | Answer Count         | 16 bits            | The number of entries in the Answer Section                                                                                                    |
-| NSCOUNT  | Authority Count      | 16 bits            | The number of entries in the Authority Section                                                                                                 |
-| ARCOUNT  | Additional Count     | 16 bits            | The number of entries in the Additional Section    
-
-| Field  | Type           | Description                                                          |
-| ------ | -------------- | -------------------------------------------------------------------- |
-| Name   | Label Sequence | The domain name, encoded as a sequence of labels as described below. |
-| Type   | 2-byte Integer | The record type.                                                     |
-| Class  | 2-byte Integer | The class, in practice always set to 1.                              |
-
-
-| Field  | Type           | Description                                                                       |
-| ------ | -------------- | --------------------------------------------------------------------------------- |
-| Name   | Label Sequence | The domain name, encoded as a sequence of labels as described below.              |
-| Type   | 2-byte Integer | The record type.                                                                  |
-| Class  | 2-byte Integer | The class, in practice always set to 1.                                           |
-| TTL    | 4-byte Integer | Time-To-Live, i.e. how long a record can be cached before it should be requeried. |
-| Len    | 2-byte Integer | Length of the record type specific data.                                          |
