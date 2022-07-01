@@ -1,7 +1,6 @@
 # DNS Server
 
-The server houses a DNS recursive resolver.
-It is compatible with existing DNS query tool dig.
+The server houses a DNS recursive resolver and it is compatible with dig.
 
 ### Handles the following types of records.
 1. A
