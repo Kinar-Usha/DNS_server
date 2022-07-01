@@ -1,6 +1,6 @@
 # DNS Server
 
-The server houses a stub resolver, DNS recursive resolver.
+The server houses a DNS recursive resolver.
 It is compatible with existing DNS query tool dig.
 
 # Reference
