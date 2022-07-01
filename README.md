@@ -3,6 +3,13 @@
 The server houses a DNS recursive resolver.
 It is compatible with existing DNS query tool dig.
 
+### Handles the following types of records.
+1. A
+2. AAAA
+3. NS
+4. MX
+5. CNAME
+
 # Reference
 [RFC 1034](https://datatracker.ietf.org/doc/html/rfc1034)
 [RFC 1035](https://datatracker.ietf.org/doc/html/rfc1035)
