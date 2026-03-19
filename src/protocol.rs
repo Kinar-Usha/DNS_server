@@ -2,6 +2,7 @@
 //! DnsPacket -> { DnsHeader ,DnsQuestion -> { QueryType }, DnsRecord }
 
 use crate::buffer::BytePacketBuffer;
+use std::fmt;
 use std::net::{Ipv4Addr, Ipv6Addr};
 type Error = Box<dyn std::error::Error>;
 type Result<T> = std::result::Result<T, Error>;
@@ -152,6 +153,19 @@ impl QueryType {
             15 => QueryType::MX,
             28 => QueryType::AAAA,
             _ => QueryType::UNKNOWN(num),
+        }
+    }
+}
+
+impl fmt::Display for QueryType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            QueryType::A => write!(f, "A"),
+            QueryType::NS => write!(f, "NS"),
+            QueryType::CNAME => write!(f, "CNAME"),
+            QueryType::MX => write!(f, "MX"),
+            QueryType::AAAA => write!(f, "AAAA"),
+            QueryType::UNKNOWN(num) => write!(f, "UNKNOWN({})", num),
         }
     }
 }
