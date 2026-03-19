@@ -14,36 +14,75 @@ use tokio::net::UdpSocket;
 type Error = Box<dyn std::error::Error>;
 type Result<T> = std::result::Result<T, Error>;
 
+const ROOT_SERVERS: &[&str] = &[
+    "198.41.0.4",     // a.root-servers.net
+    "199.9.14.201",   // b.root-servers.net
+    "192.33.4.12",    // c.root-servers.net
+    "199.7.91.13",    // d.root-servers.net
+    "192.203.230.10", // e.root-servers.net
+    "192.5.5.241",    // f.root-servers.net
+    "192.112.36.4",   // g.root-servers.net
+    "198.97.190.53",  // h.root-servers.net
+    "192.36.148.17",  // i.root-servers.net
+    "192.58.128.30",  // j.root-servers.net
+    "193.0.14.129",   // k.root-servers.net
+    "199.7.83.42",    // l.root-servers.net
+    "202.12.27.33",   // m.root-servers.net
+];
+
 async fn lookup(qname: &str, qtype: QueryType, server: (Ipv4Addr, u16)) -> Result<DnsPacket> {
-    // Bind to any available port (0 = OS assigns free port) to avoid port exhaustion
-    let socket = UdpSocket::bind("0.0.0.0:0")
-        .await
-        .map_err(|e| format!("Failed to bind local socket for lookup of '{}' ({}): {}", qname, qtype, e))?;
-    
-    let mut packet = DnsPacket::new();
-    packet.header.id = rand::random();  // Use random ID instead of fixed 6969
-    packet.header.questions = 1;
-    packet.header.recursion_desired = true;
-    packet
-        .questions
-        .push(DnsQuestion::new(qname.to_string(), qtype));
+    let mut last_error = None;
 
-    let mut request_buffer = BytePacketBuffer::new();
-    packet.write(&mut request_buffer)
-        .map_err(|e| format!("Failed to write DNS packet for '{}' ({}): {}", qname, qtype, e))?;
-    
-    socket.send_to(&request_buffer.buf[0..request_buffer.pos], server)
-        .await
-        .map_err(|e| format!("Failed to send DNS query for '{}' ({}) to {}: {}", qname, qtype, server.0, e))?;
+    // Try up to 3 times for each lookup
+    for attempt in 0..3 {
+        // Bind to any available port (0 = OS assigns free port) to avoid port exhaustion
+        let socket = match UdpSocket::bind("0.0.0.0:0").await {
+            Ok(s) => s,
+            Err(e) => {
+                last_error = Some(format!("Failed to bind local socket: {}", e));
+                continue;
+            }
+        };
+        
+        let mut packet = DnsPacket::new();
+        packet.header.id = rand::random();
+        packet.header.questions = 1;
+        packet.header.recursion_desired = true;
+        packet
+            .questions
+            .push(DnsQuestion::new(qname.to_string(), qtype));
 
-    let mut result_buffer = BytePacketBuffer::new();
-    match tokio::time::timeout(std::time::Duration::from_secs(5), socket.recv_from(&mut result_buffer.buf)).await {
-        Ok(res) => res.map_err(|e| format!("Failed to receive response for '{}' ({}) from {}: {}", qname, qtype, server.0, e))?,
-        Err(_) => return Err(format!("Timeout waiting for response for '{}' ({}) from {}", qname, qtype, server.0).into()),
-    };
-    
-    DnsPacket::from_buffer(&mut result_buffer)
-        .map_err(|e| format!("Failed to parse response packet for '{}' ({}): {}", qname, qtype, e).into())
+        let mut request_buffer = BytePacketBuffer::new();
+        if let Err(e) = packet.write(&mut request_buffer) {
+            return Err(format!("Failed to write DNS packet: {}", e).into());
+        }
+        
+        if let Err(e) = socket.send_to(&request_buffer.buf[0..request_buffer.pos], server).await {
+            last_error = Some(format!("Failed to send DNS query: {}", e));
+            continue;
+        }
+
+        let mut result_buffer = BytePacketBuffer::new();
+        // Use a 3-second timeout per attempt, total 9 seconds across 3 attempts
+        match tokio::time::timeout(std::time::Duration::from_secs(3), socket.recv_from(&mut result_buffer.buf)).await {
+            Ok(Ok(_)) => {
+                return DnsPacket::from_buffer(&mut result_buffer)
+                    .map_err(|e| format!("Failed to parse response packet: {}", e).into());
+            }
+            Ok(Err(e)) => {
+                last_error = Some(format!("Failed to receive response: {}", e));
+            }
+            Err(_) => {
+                last_error = Some("Timeout waiting for response".to_string());
+            }
+        }
+        
+        log::debug!("Attempt {} failed for '{}' ({}) from {}: {:?}", 
+            attempt + 1, qname, qtype, server.0, last_error);
+    }
+
+    Err(format!("Lookup failed for '{}' ({}) after 3 attempts. Last error: {:?}", 
+        qname, qtype, last_error).into())
 }
 
 
@@ -55,7 +94,7 @@ fn recursive_lookup(
     let qname = qname.to_string();
     
     Box::pin(async move {
-        // Check cache first if enabled
+        // ... (cache check remains the same)
         if let Some(ref cache) = cache {
             let cache_key = CacheKey::new(qname.clone(), qtype.to_num());
             if let Some(cached) = cache.get(&cache_key) {
@@ -72,8 +111,9 @@ fn recursive_lookup(
             }
         }
 
-        // we start with `a.root-servers.net`
-        let mut ns = "198.41.0.4".parse::<Ipv4Addr>().unwrap();
+        // Randomly pick a root server to start with
+        let root_idx = rand::random::<usize>() % ROOT_SERVERS.len();
+        let mut ns = ROOT_SERVERS[root_idx].parse::<Ipv4Addr>().unwrap();
 
         loop {
             log::debug!("Looking up {:?} {} with ns {}", qtype, &qname, ns);
@@ -88,6 +128,7 @@ fn recursive_lookup(
                     return Err(e);
                 }
             };
+
 
             if response.header.rescode == ResultCode::NOERROR && !response.answers.is_empty() {
                 log::debug!("Found answers for '{}' ({})", &qname, qtype);
