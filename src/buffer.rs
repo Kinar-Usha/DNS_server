@@ -70,6 +70,14 @@ impl BytePacketBuffer {
 
         Ok(res)
     }
+
+    pub fn read_bytes(&mut self, len: usize) -> Result<Vec<u8>> {
+        let mut res = Vec::with_capacity(len);
+        for _ in 0..len {
+            res.push(self.read()?);
+        }
+        Ok(res)
+    }
     /// reading domain name.
     /// Will take something like \[3\]www\[6\]google\[3\]com\[0\] and append www.google.com to outstr.
     pub fn read_qname(&mut self, outstr: &mut String) -> Result<()> {
@@ -190,3 +198,181 @@ impl BytePacketBuffer {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ===== Positive Tests =====
+
+    #[test]
+    fn test_buffer_creation() {
+        let buf = BytePacketBuffer::new();
+        assert_eq!(buf.pos(), 0);
+        assert_eq!(buf.buf.len(), 512);
+    }
+
+    #[test]
+    fn test_write_and_read_single_byte() {
+        let mut buf = BytePacketBuffer::new();
+        assert!(buf.write(42).is_ok());
+        
+        let mut buf2 = BytePacketBuffer::new();
+        buf2.buf = buf.buf;
+        let val = buf2.read().unwrap();
+        assert_eq!(val, 42);
+    }
+
+    #[test]
+    fn test_write_and_read_u16() {
+        let mut buf = BytePacketBuffer::new();
+        assert!(buf.write_u16(0x1234).is_ok());
+        
+        let mut buf2 = BytePacketBuffer::new();
+        buf2.buf = buf.buf;
+        let val = buf2.read_u16().unwrap();
+        assert_eq!(val, 0x1234);
+    }
+
+    #[test]
+    fn test_write_and_read_u32() {
+        let mut buf = BytePacketBuffer::new();
+        assert!(buf.write_u32(0x12345678).is_ok());
+        
+        let mut buf2 = BytePacketBuffer::new();
+        buf2.buf = buf.buf;
+        let val = buf2.read_u32().unwrap();
+        assert_eq!(val, 0x12345678);
+    }
+
+    #[test]
+    fn test_write_qname() {
+        let mut buf = BytePacketBuffer::new();
+        assert!(buf.write_qname("example.com").is_ok());
+        
+        let mut buf2 = BytePacketBuffer::new();
+        buf2.buf = buf.buf;
+        let mut qname = String::new();
+        assert!(buf2.read_qname(&mut qname).is_ok());
+        assert_eq!(qname, "example.com");
+    }
+
+    #[test]
+    fn test_write_qname_single_label() {
+        let mut buf = BytePacketBuffer::new();
+        assert!(buf.write_qname("localhost").is_ok());
+        
+        let mut buf2 = BytePacketBuffer::new();
+        buf2.buf = buf.buf;
+        let mut qname = String::new();
+        assert!(buf2.read_qname(&mut qname).is_ok());
+        assert_eq!(qname, "localhost");
+    }
+
+    #[test]
+    fn test_seek() {
+        let mut buf = BytePacketBuffer::new();
+        assert!(buf.seek(100).is_ok());
+        assert_eq!(buf.pos(), 100);
+    }
+
+    #[test]
+    fn test_step() {
+        let mut buf = BytePacketBuffer::new();
+        assert!(buf.step(50).is_ok());
+        assert_eq!(buf.pos(), 50);
+        assert!(buf.step(30).is_ok());
+        assert_eq!(buf.pos(), 80);
+    }
+
+    #[test]
+    fn test_get() {
+        let mut buf = BytePacketBuffer::new();
+        buf.buf[10] = 0xFF;
+        let val = buf.get(10).unwrap();
+        assert_eq!(val, 0xFF);
+    }
+
+    #[test]
+    fn test_get_range() {
+        let mut buf = BytePacketBuffer::new();
+        buf.buf[0] = 1;
+        buf.buf[1] = 2;
+        buf.buf[2] = 3;
+        let range = buf.get_range(0, 3).unwrap();
+        assert_eq!(range, &[1, 2, 3]);
+    }
+
+    #[test]
+    fn test_set() {
+        let mut buf = BytePacketBuffer::new();
+        assert!(buf.set(50, 0xAB).is_ok());
+        assert_eq!(buf.buf[50], 0xAB);
+    }
+
+    #[test]
+    fn test_set_u16() {
+        let mut buf = BytePacketBuffer::new();
+        assert!(buf.set_u16(0, 0x5678).is_ok());
+        assert_eq!(buf.buf[0], 0x56);
+        assert_eq!(buf.buf[1], 0x78);
+    }
+
+    // ===== Negative Tests =====
+
+    #[test]
+    fn test_read_beyond_buffer() {
+        let mut buf = BytePacketBuffer::new();
+        buf.pos = 512;
+        assert!(buf.read().is_err());
+    }
+
+    #[test]
+    fn test_write_beyond_buffer() {
+        let mut buf = BytePacketBuffer::new();
+        buf.pos = 512;
+        assert!(buf.write(42).is_err());
+    }
+
+    #[test]
+    fn test_get_beyond_buffer() {
+        let mut buf = BytePacketBuffer::new();
+        assert!(buf.get(512).is_err());
+    }
+
+    #[test]
+    fn test_get_range_beyond_buffer() {
+        let mut buf = BytePacketBuffer::new();
+        assert!(buf.get_range(500, 20).is_err());
+    }
+
+    #[test]
+    fn test_read_u16_beyond_buffer() {
+        let mut buf = BytePacketBuffer::new();
+        buf.pos = 511; // Only 1 byte left
+        assert!(buf.read_u16().is_err());
+    }
+
+    #[test]
+    fn test_read_u32_beyond_buffer() {
+        let mut buf = BytePacketBuffer::new();
+        buf.pos = 510; // Only 2 bytes left
+        assert!(buf.read_u32().is_err());
+    }
+
+    #[test]
+    fn test_write_qname_label_too_long() {
+        let mut buf = BytePacketBuffer::new();
+        // Create a label longer than 63 characters (0x3F)
+        let long_label = "a".repeat(100);
+        assert!(buf.write_qname(&long_label).is_err());
+    }
+
+    #[test]
+    fn test_write_qname_buffer_overflow() {
+        let mut buf = BytePacketBuffer::new();
+        buf.pos = 510; // Very close to end
+        assert!(buf.write_qname("example.com").is_err());
+    }
+}
+

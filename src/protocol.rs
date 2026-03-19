@@ -29,7 +29,7 @@ impl ResultCode {
         }
     }
 }
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct DnsHeader {
     pub id: u16,
     pub recursion_desired: bool,
@@ -132,6 +132,7 @@ pub enum QueryType {
     CNAME,
     MX,
     AAAA,
+    SOA,
 }
 impl QueryType {
     pub fn to_num(&self) -> u16 {
@@ -142,6 +143,7 @@ impl QueryType {
             QueryType::CNAME => 5,
             QueryType::MX => 15,
             QueryType::AAAA => 28,
+            QueryType::SOA => 6,
         }
     }
 
@@ -152,6 +154,7 @@ impl QueryType {
             5 => QueryType::CNAME,
             15 => QueryType::MX,
             28 => QueryType::AAAA,
+            6 => QueryType::SOA,
             _ => QueryType::UNKNOWN(num),
         }
     }
@@ -165,6 +168,7 @@ impl fmt::Display for QueryType {
             QueryType::CNAME => write!(f, "CNAME"),
             QueryType::MX => write!(f, "MX"),
             QueryType::AAAA => write!(f, "AAAA"),
+            QueryType::SOA => write!(f, "SOA"),
             QueryType::UNKNOWN(num) => write!(f, "UNKNOWN({})", num),
         }
     }
@@ -207,6 +211,7 @@ pub enum DnsRecord {
         qtype: u16,
         data_len: u16,
         ttl: u32,
+        data: Vec<u8>,
     },
     A {
         domain: String,
@@ -232,6 +237,17 @@ pub enum DnsRecord {
     AAAA {
         domain: String,
         addr: Ipv6Addr,
+        ttl: u32,
+    },
+    SOA {
+        domain: String,
+        mname: String,
+        rname: String,
+        serial: u32,
+        refresh: u32,
+        retry: u32,
+        expire: u32,
+        minimum: u32,
         ttl: u32,
     },
 }
@@ -316,14 +332,38 @@ impl DnsRecord {
                     ttl,
                 })
             }
+            QueryType::SOA => {
+                let mut mname = String::new();
+                buffer.read_qname(&mut mname)?;
+                let mut rname = String::new();
+                buffer.read_qname(&mut rname)?;
+                let serial = buffer.read_u32()?;
+                let refresh = buffer.read_u32()?;
+                let retry = buffer.read_u32()?;
+                let expire = buffer.read_u32()?;
+                let minimum = buffer.read_u32()?;
+
+                Ok(DnsRecord::SOA {
+                    domain,
+                    mname,
+                    rname,
+                    serial,
+                    refresh,
+                    retry,
+                    expire,
+                    minimum,
+                    ttl,
+                })
+            }
             QueryType::UNKNOWN(_) => {
-                buffer.step(data_len as usize)?;
+                let data = buffer.read_bytes(data_len as usize)?;
 
                 Ok(DnsRecord::UNKNOWN {
                     domain,
                     qtype: qtype_num,
                     data_len,
                     ttl,
+                    data,
                 })
             }
         }
@@ -416,15 +456,59 @@ impl DnsRecord {
                     buffer.write_u16(*octet)?;
                 }
             }
-            DnsRecord::UNKNOWN { .. } => {
-                println!("Skipping record: {:?}", self);
+            DnsRecord::SOA {
+                ref domain,
+                ref mname,
+                ref rname,
+                serial,
+                refresh,
+                retry,
+                expire,
+                minimum,
+                ttl,
+            } => {
+                buffer.write_qname(domain)?;
+                buffer.write_u16(QueryType::SOA.to_num())?;
+                buffer.write_u16(1)?;
+                buffer.write_u32(ttl)?;
+
+                let pos = buffer.pos();
+                buffer.write_u16(0)?;
+
+                buffer.write_qname(mname)?;
+                buffer.write_qname(rname)?;
+                buffer.write_u32(serial)?;
+                buffer.write_u32(refresh)?;
+                buffer.write_u32(retry)?;
+                buffer.write_u32(expire)?;
+                buffer.write_u32(minimum)?;
+
+                let size = buffer.pos() - (pos + 2);
+                buffer.set_u16(pos, size as u16)?;
+            }
+            DnsRecord::UNKNOWN {
+                ref domain,
+                qtype,
+                data_len,
+                ttl,
+                ref data,
+            } => {
+                buffer.write_qname(domain)?;
+                buffer.write_u16(qtype)?;
+                buffer.write_u16(1)?;
+                buffer.write_u32(ttl)?;
+                buffer.write_u16(data_len)?;
+
+                for b in data {
+                    buffer.write_u8(*b)?;
+                }
             }
         }
         Ok(buffer.pos() - start_pos)
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct DnsPacket {
     pub header: DnsHeader,
     pub questions: Vec<DnsQuestion>,
@@ -462,7 +546,7 @@ impl DnsPacket {
             let record = DnsRecord::read(buffer)?;
             result.authorities.push(record);
         }
-        for _ in 0..result.header.authoritative_entries {
+        for _ in 0..result.header.resource_entries {
             let record = DnsRecord::read(buffer)?;
             result.resources.push(record);
         }

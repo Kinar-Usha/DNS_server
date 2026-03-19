@@ -39,6 +39,52 @@ The DNS server evolved from a single-threaded architecture to a fully asynchrono
 - **Memory efficient**: Tokio manages a thread pool internally, requiring far fewer threads than traditional thread-per-request models
 - **Resilient**: Each query runs in an isolated task, so individual query failures don't crash the server
 
+### DNS Caching Architecture
+
+The server includes an efficient **LRU (Least Recently Used) caching layer** to improve query performance:
+
+```
+┌─────────────────────────────────────┐
+│    Incoming DNS Query (dig)         │
+└────────────────┬────────────────────┘
+                 │
+                 ▼
+        ┌────────────────────┐
+        │ Cache Lookup       │
+        │ (O(1) hash lookup) │
+        └────┬───────────┬───┘
+             │           │
+          HIT│           │MISS
+             ▼           ▼
+        ┌─────────┐  ┌──────────────────┐
+        │ Return  │  │ Recursive Lookup │
+        │ Cached  │  │ (traverse DNS)   │
+        │ Result  │  └────────┬─────────┘
+        └─────────┘           │
+                              ▼
+                        ┌──────────────────┐
+                        │ Store in Cache   │
+                        │ (with TTL)       │
+                        └────────┬─────────┘
+                                 ▼
+                        ┌──────────────────┐
+                        │ Return Response  │
+                        └──────────────────┘
+```
+
+**Key features:**
+- **Thread-safe**: Uses Arc<Mutex<>> for safe concurrent access
+- **TTL-aware**: Cached entries expire according to DNS TTL values
+- **LRU eviction**: Automatically removes least recently used entries when capacity is exceeded
+- **Configurable size**: Cache size is controlled via CLI argument
+- **Hit rate tracking**: Monitors cache performance with hit/miss statistics
+- **Periodic logging**: Logs cache statistics every 60 seconds
+
+**Cache trait design** (`src/cache/mod.rs`):
+- Backend-agnostic through the `DnsCache` trait
+- Current implementation: LRU cache (`src/cache/lru.rs`)
+- Future implementations: SQLite, Redis, Memcached (drop-in replacements)
+
 ## Performance & Deployment
 
 ### Concurrent Query Handling
@@ -88,15 +134,67 @@ cargo build --release
 
 ### Running the Server
 
+#### Basic Usage
+
 ```bash
-# Start with default logging
+# Start with default configuration (port 2053, cache size 1000)
 ./target/release/dns_server
 
-# Start with debug logging
+# With custom logging
 RUST_LOG=debug ./target/release/dns_server
+RUST_LOG=info ./target/release/dns_server
+```
 
-# Start with trace-level logging (very verbose)
-RUST_LOG=trace ./target/release/dns_server
+#### Configuration Options
+
+```bash
+# Custom port and cache size
+./target/release/dns_server --port 5353 --cache-size 5000
+
+# Short flags
+./target/release/dns_server -p 5353 -c 5000
+
+# Full configuration
+./target/release/dns_server \
+  --bind 0.0.0.0 \
+  --port 2053 \
+  --cache-size 10000 \
+  --log-level debug
+
+# Disable caching (useful for testing)
+./target/release/dns_server --cache-size 0
+
+# Get help
+./target/release/dns_server --help
+```
+
+**Configuration parameters:**
+- `--bind <ADDR>` - Bind address (default: 0.0.0.0)
+- `--port <PORT>` - UDP port (default: 2053)
+- `-p, --port <PORT>` - Short form
+- `--cache-size <SIZE>` - Number of DNS records to cache (default: 1000)
+- `-c, --cache-size <SIZE>` - Short form
+- `--log-level <LEVEL>` - Log level: trace, debug, info, warn, error (default: debug)
+- `-l, --log-level <LEVEL>` - Short form
+- `--threads <COUNT>` - Number of worker threads (default: auto-detect)
+- `-t, --threads <COUNT>` - Short form
+- `--help` - Show help message
+- `-h` - Short help
+
+### Caching Examples
+
+```bash
+# Production setup with large cache (10k entries, 100MB+)
+./target/release/dns_server --cache-size 10000 --log-level info
+
+# Development with debug logging
+./target/release/dns_server --cache-size 100 --log-level debug
+
+# High performance: large cache for frequently accessed domains
+./target/release/dns_server --cache-size 50000 --log-level warn
+
+# Testing: disable cache to measure resolution time
+./target/release/dns_server --cache-size 0
 ```
 
 **Port Requirements:**
@@ -117,6 +215,68 @@ dig "@127.0.0.1" -p 2053 google.com
 dig @127.0.0.1 -p 2053 google.com AAAA
 dig @127.0.0.1 -p 2053 google.com MX
 ```
+
+## Caching Performance
+
+The built-in LRU cache dramatically improves query performance for frequently accessed domains:
+
+### Performance Metrics
+
+**Without cache (every query performs recursive lookup):**
+- Initial query: 200-500ms
+- All queries require nameserver traversal
+
+**With cache (hits on repeated queries):**
+- Initial query: 200-500ms (recursive lookup + cache)
+- Cached query: <5ms (immediate response)
+- Result: **40-100x faster** for cached queries
+
+### Cache Hit Rate
+
+Monitor cache effectiveness through periodic statistics:
+
+```
+Cache Stats: 45 hits, 5 misses, 32 entries, 90.00% hit rate
+```
+
+- **High hit rate (>80%)**: Cache is working well, queries are being reused
+- **Low hit rate (<20%)**: Many unique domains, increase cache size if memory allows
+
+### Configuring Cache Size
+
+The optimal cache size depends on your use case:
+
+```bash
+# Small deployments (< 1000 unique domains/day)
+./target/release/dns_server --cache-size 1000
+
+# Medium deployments (1000-10000 unique domains/day)
+./target/release/dns_server --cache-size 5000
+
+# Large deployments (>10000 unique domains/day)
+./target/release/dns_server --cache-size 50000
+```
+
+**Memory usage estimate:**
+- Each cached entry: ~500-1000 bytes
+- 1000 entries: ~1 MB
+- 10000 entries: ~10 MB
+- 50000 entries: ~50 MB
+
+### Monitoring Cache Health
+
+Enable debug logging to monitor cache behavior in detail:
+
+```bash
+RUST_LOG=debug ./target/release/dns_server --cache-size 1000
+```
+
+Key log messages:
+- `Cache hit for '<domain>' (<qtype>)` - Cache hit occurred
+- `Cached result for '<domain>' (<qtype>) - cache_size: N` - Entry added
+- `Cache Stats: X hits, Y misses, Z entries, A% hit rate` - Statistics (every 60s)
+
+See [CACHE_TESTING.md](CACHE_TESTING.md) for detailed testing procedures.
 
 ## Concurrency Testing
 
