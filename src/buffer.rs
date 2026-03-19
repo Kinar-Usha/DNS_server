@@ -5,14 +5,14 @@ type Result<T> = std::result::Result<T, Error>;
 
 /// UDP packet structure.
 pub struct BytePacketBuffer {
-    pub buf: [u8; 512],
+    pub buf: [u8; 4096],
     pub pos: usize,
 }
 
 impl BytePacketBuffer {
     pub fn new() -> BytePacketBuffer {
         BytePacketBuffer {
-            buf: [0; 512],
+            buf: [0; 4096],
             pos: 0,
         }
     }
@@ -33,7 +33,7 @@ impl BytePacketBuffer {
     }
 
     pub fn read(&mut self) -> Result<u8> {
-        if self.pos >= 512 {
+        if self.pos >= 4096 {
             return Err("End of buffer".into());
         }
         let res = self.buf[self.pos];
@@ -43,14 +43,14 @@ impl BytePacketBuffer {
     }
 
     pub fn get(&mut self, pos: usize) -> Result<u8> {
-        if pos >= 512 {
+        if pos >= 4096 {
             return Err("End of buffer".into());
         }
         Ok(self.buf[pos])
     }
 
     pub fn get_range(&mut self, start: usize, len: usize) -> Result<&[u8]> {
-        if start + len >= 512 {
+        if start + len > 4096 {
             return Err("End of buffer".into());
         }
         Ok(&self.buf[start..start + len as usize])
@@ -137,7 +137,7 @@ impl BytePacketBuffer {
     }
 
     pub fn write(&mut self, val: u8) -> Result<()> {
-        if self.pos >= 512 {
+        if self.pos >= 4096 {
             return Err("End of buffer".into());
         }
         self.buf[self.pos] = val;
@@ -170,7 +170,7 @@ impl BytePacketBuffer {
     pub fn write_qname(&mut self, qname: &str) -> Result<()> {
         for label in qname.split('.') {
             let len = label.len();
-            if len > 0x34 {
+            if len > 63 {
                 return Err("Single label exceeds 63 characters of length".into());
             }
 
@@ -209,7 +209,7 @@ mod tests {
     fn test_buffer_creation() {
         let buf = BytePacketBuffer::new();
         assert_eq!(buf.pos(), 0);
-        assert_eq!(buf.buf.len(), 512);
+        assert_eq!(buf.buf.len(), 4096);
     }
 
     #[test]
@@ -323,47 +323,47 @@ mod tests {
     #[test]
     fn test_read_beyond_buffer() {
         let mut buf = BytePacketBuffer::new();
-        buf.pos = 512;
+        buf.pos = 4096;
         assert!(buf.read().is_err());
     }
 
     #[test]
     fn test_write_beyond_buffer() {
         let mut buf = BytePacketBuffer::new();
-        buf.pos = 512;
+        buf.pos = 4096;
         assert!(buf.write(42).is_err());
     }
 
     #[test]
     fn test_get_beyond_buffer() {
         let mut buf = BytePacketBuffer::new();
-        assert!(buf.get(512).is_err());
+        assert!(buf.get(4096).is_err());
     }
 
     #[test]
     fn test_get_range_beyond_buffer() {
         let mut buf = BytePacketBuffer::new();
-        assert!(buf.get_range(500, 20).is_err());
+        assert!(buf.get_range(4000, 100).is_err());
     }
 
     #[test]
     fn test_read_u16_beyond_buffer() {
         let mut buf = BytePacketBuffer::new();
-        buf.pos = 511; // Only 1 byte left
+        buf.pos = 4095; // Only 1 byte left
         assert!(buf.read_u16().is_err());
     }
 
     #[test]
     fn test_read_u32_beyond_buffer() {
         let mut buf = BytePacketBuffer::new();
-        buf.pos = 510; // Only 2 bytes left
+        buf.pos = 4094; // Only 2 bytes left
         assert!(buf.read_u32().is_err());
     }
 
     #[test]
     fn test_write_qname_label_too_long() {
         let mut buf = BytePacketBuffer::new();
-        // Create a label longer than 63 characters (0x3F)
+        // Create a label longer than 63 characters
         let long_label = "a".repeat(100);
         assert!(buf.write_qname(&long_label).is_err());
     }
@@ -371,7 +371,7 @@ mod tests {
     #[test]
     fn test_write_qname_buffer_overflow() {
         let mut buf = BytePacketBuffer::new();
-        buf.pos = 510; // Very close to end
+        buf.pos = 4090; // Very close to end
         assert!(buf.write_qname("example.com").is_err());
     }
 }
