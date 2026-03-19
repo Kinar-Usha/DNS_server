@@ -18,6 +18,8 @@ import dns.resolver
 import time
 import statistics
 import sys
+import argparse
+import os
 from dataclasses import dataclass
 from typing import List, Tuple
 from datetime import datetime
@@ -35,13 +37,16 @@ class QueryResult:
 
 
 class DNSLoadTester:
-    def __init__(self, host: str = "127.0.0.1", port: int = 2053, timeout: int = 5):
-        self.host = host
-        self.port = port
+    def __init__(self, host: str = "127.0.0.1", port: int = 2053, timeout: int = 5, use_system_dns: bool = False):
+        self.host = host if not use_system_dns else "System Default"
+        self.port = port if not use_system_dns else "Default"
         self.timeout = timeout
         self.resolver = dns.resolver.Resolver()
-        self.resolver.nameservers = [host]
-        self.resolver.port = port
+        
+        if not use_system_dns:
+            self.resolver.nameservers = [host]
+            self.resolver.port = port
+        
         self.resolver.timeout = timeout
         self.resolver.lifetime = timeout
         self.results: List[QueryResult] = []
@@ -161,11 +166,28 @@ class DNSLoadTester:
 
 async def main():
     """Run comprehensive load tests"""
+    parser = argparse.ArgumentParser(description="DNS Server Load Tester")
+    parser.add_argument("--host", default="127.0.0.1", help="DNS server host (default: 127.0.0.1)")
+    parser.add_argument("--port", type=int, default=2053, help="DNS server port (default: 2053)")
+    parser.add_argument("--timeout", type=int, default=10, help="Query timeout in seconds (default: 10)")
+    parser.add_argument("--system", action="store_true", help="Use system default DNS instead of a specific host/port")
+    parser.add_argument("--output-dir", default="stats", help="Directory to save test results (default: test_results)")
+
+    args = parser.parse_args()
+
+    # Create output directory if it doesn't exist
+    if not os.path.exists(args.output_dir):
+        os.makedirs(args.output_dir)
+
     print(f"\n🚀 DNS Server Load Testing - Started at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"Target: http://127.0.0.1:2053")
-    
-    tester = DNSLoadTester(host="127.0.0.1", port=2053, timeout=10)
+    if args.system:
+        print(f"Target: System Default DNS")
+    else:
+        print(f"Target: {args.host}:{args.port}")
+
+    tester = DNSLoadTester(host=args.host, port=args.port, timeout=args.timeout, use_system_dns=args.system)
     all_stats = []
+
 
     # Test 1: Cache warm-up (real domains)
     print("\n📍 Test 1: Cache Warm-up (Real domains)")
@@ -202,16 +224,16 @@ async def main():
     stats = tester.print_statistics(results, "High Concurrency")
     all_stats.append(stats)
 
-    # # Test 6: Mixed query types
-    # print("📍 Test 6: Mixed Query Types (A and NS records, 30 concurrent)")
-    # a_records = tester.generate_test_domains(count=25)
-    # ns_records = tester.generate_test_domains(count=25)
+    # Test 6: Mixed query types
+    print("📍 Test 6: Mixed Query Types (A and NS records, 30 concurrent)")
+    a_records = tester.generate_test_domains(count=25)
+    ns_records = tester.generate_test_domains(count=25)
     
-    # results_a = await tester.run_concurrent_queries(a_records, qtype="A", concurrency=15)
-    # results_ns = await tester.run_concurrent_queries(ns_records, qtype="NS", concurrency=15)
-    # combined_results = results_a + results_ns
-    # stats = tester.print_statistics(combined_results, "Mixed Query Types")
-    # all_stats.append(stats)
+    results_a = await tester.run_concurrent_queries(a_records, qtype="A", concurrency=15)
+    results_ns = await tester.run_concurrent_queries(ns_records, qtype="NS", concurrency=15)
+    combined_results = results_a + results_ns
+    stats = tester.print_statistics(combined_results, "Mixed Query Types")
+    all_stats.append(stats)
 
     # Test 7: Sustained load (follow-up queries to test cache)
     print("📍 Test 7: Sustained Load (re-query same 25 domains)")
@@ -243,11 +265,12 @@ async def main():
     print("="*60)
 
     # Save results to JSON
-    output_file = f"load_test_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-    with open(output_file, 'w') as f:
+    filename = f"load_test_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    output_path = os.path.join(args.output_dir, filename)
+    with open(output_path, 'w') as f:
         json.dump(all_stats, f, indent=2)
     
-    print(f"\n✅ Results saved to: {output_file}")
+    print(f"\n✅ Results saved to: {output_path}")
     print(f"✅ Load testing completed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
 
 
