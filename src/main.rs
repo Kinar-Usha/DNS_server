@@ -18,10 +18,22 @@ async fn main() {
     // Parse and validate CLI arguments
     let config = Config::parse_and_validate();
     
-    // Initialize logger with configured log level
-    env_logger::Builder::from_default_env()
-        .filter_level(config.log_level.parse().unwrap_or(log::LevelFilter::Debug))
-        .init();
+    // Initialize flexi_logger to log to console AND file
+    let _logger = flexi_logger::Logger::try_with_str(&config.log_level)
+        .unwrap()
+        .log_to_file(
+            flexi_logger::FileSpec::default()
+                .directory("logs")
+                .basename("dns_server"),
+        )
+        .duplicate_to_stderr(flexi_logger::Duplicate::All)
+        .rotate(
+            flexi_logger::Criterion::Age(flexi_logger::Age::Day),
+            flexi_logger::Naming::Timestamps,
+            flexi_logger::Cleanup::KeepLogFiles(7),
+        )
+        .start()
+        .unwrap();
 
     // Print startup configuration
     config.print_startup_info();
